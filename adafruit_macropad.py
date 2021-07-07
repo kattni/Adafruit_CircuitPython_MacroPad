@@ -247,7 +247,31 @@ class MacroPad:
 
     @property
     def keys(self):
-        """ """
+        """
+        The keys on the MacroPad. Uses events to track key number and state, e.g. pressed or
+        released. You must fetch the events using ``keys.event.get()`` and then the events are
+        available for usage in your code. Each event has three properties:
+            * ``key_number``: the number of the key that changed. Keys are numbered starting at 0.
+            * ``pressed``: ``True`` if the event is a transition from released to pressed.
+            * ``released``: ``True`` if the event is a transition from pressed to released.
+                            ``released`` is always the opposite of ``pressed``; it's provided
+                            for convenience and clarity, in case you want to test for
+                            key-release events explicitly.
+
+        The following example prints the key press and release events to the serial console.
+
+        .. code-block:: python
+
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                event = macropad.keys.event.get()
+                if event:
+                    print(event)
+        """
         return self._keys
 
     @property
@@ -259,6 +283,7 @@ class MacroPad:
         The following example prints the relative position to the serial console.
 
         .. code-block:: python
+
             from adafruit_macropad import MacroPad
 
             macropad = MacroPad()
@@ -270,10 +295,23 @@ class MacroPad:
 
     @property
     def encoder_switch(self):
+        """
+        The rotary encoder switch. Returns ``True`` when pressed.
+
+        The following example prints the status of the rotary encoder switch to the serial console.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+
+        """
         return not self._encoder_switch.value
 
     @property
-    def keyboard(self):
+    def keyboard(self): 
         return self._keyboard
 
     @staticmethod
@@ -324,6 +362,19 @@ class MacroPad:
                               a string.
         :param tuple position: Optional ``(x, y)`` coordinates to place the image.
 
+        The following example displays an image called "image.bmp" located in / on the CIRCUITPY
+        drive on the display.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            macropad.display_image("image.bmp")
+
+            while True:
+                pass
         """
         if not file_name:
             return
@@ -361,6 +412,26 @@ class MacroPad:
         :param font: The font or the path to the custom font file to use to display the text.
                      Defaults to the built-in ``terminalio.FONT``. Custom font files must be
                      provided as a string, e.g. ``"/Arial12.bdf"``.
+
+        The following example displays a title and lines of text indicating which key is pressed,
+        the relative position of the rotary encoder, and whether the encoder switch is pressed.
+        Note that the key press line does not show up until a key is pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            text_lines = macropad.display_text(title="MacroPad Info")
+
+            while True:
+                event = macropad.keys.events.get()
+                if event:
+                    text_lines[0].text = "Key {} pressed!".format(event.key_number)
+                text_lines[1].text = "Rotary encoder {}".format(macropad.encoder)
+                text_lines[2].text = "Encoder switch: {}".format(macropad.encoder_switch)
+                text_lines.show()
         """
         return SimpleTextDisplay(
             title=title,
