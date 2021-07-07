@@ -350,25 +350,20 @@ class MacroPad:
     def midi(self):
         return self._midi
 
-    @staticmethod
-    def NoteOn():
-        return NoteOn
+    def NoteOn(self, note, velocity=127, *, channel=None):
+        return NoteOn(note=note, velocity=velocity, channel=channel)
 
-    @staticmethod
-    def NoteOff():
-        return NoteOff
+    def NoteOff(self, note, velocity=127, *, channel=None):
+        return NoteOff(note=note, velocity=velocity, channel=channel)
 
-    @staticmethod
-    def PitchBend():
-        return PitchBend
+    def PitchBend(self, pitch_bend, *, channel=None):
+        return PitchBend(pitch_bend=pitch_bend, channel=channel)
 
-    @staticmethod
-    def ControlChange():
-        return ControlChange
+    def ControlChange(self, control, value, *, channel=None):
+        return ControlChange(control=control, value=value, channel=channel)
 
-    @staticmethod
-    def ProgramChange():
-        return ProgramChange
+    def ProgramChange(self, patch, *, channel=None):
+        return ProgramChange(patch=patch, channel=channel)
 
     def display_image(self, file_name=None, position=None):
         """
