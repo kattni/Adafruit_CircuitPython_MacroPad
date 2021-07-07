@@ -33,6 +33,7 @@ import digitalio
 import rotaryio
 import keypad
 import neopixel
+import displayio
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -153,6 +154,9 @@ class MacroPad:
         # Define display:
         self._display = board.DISPLAY
         self._display.rotation = rotation
+        # self._bg_group = None
+        # self._bg_file = None
+        # self._bg_sprite = None
 
         # Define audio:
         # Audio functionality will be added soon.
@@ -243,10 +247,25 @@ class MacroPad:
 
     @property
     def keys(self):
+        """ """
         return self._keys
 
     @property
     def encoder(self):
+        """
+        The rotary encoder relative rotation position. Always begins at 0 when the code is run, so
+        the value returned is relative to the initial location.
+
+        The following example prints the relative position to the serial console.
+
+        .. code-block:: python
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                print(macropad.encoder)
+        """
         return self._encoder.position * -1
 
     @property
@@ -297,10 +316,52 @@ class MacroPad:
     def ControlChange():
         return ControlChange
 
+    def display_image(self, file_name=None, position=None):
+        """
+        Display an image on the built-in display.
+
+        :param str file_name: The path to a compatible bitmap image, e.g. ``"/image.bmp"``. Must be
+                              a string.
+        :param tuple position: Optional ``(x, y)`` coordinates to place the image.
+
+        """
+        if not file_name:
+            return
+        if not position:
+            position = (0, 0)
+        group = displayio.Group(scale=1)
+        self._display.show(group)
+        with open(file_name, "rb") as image_file:
+            background = displayio.OnDiskBitmap(image_file)
+            sprite = displayio.TileGrid(
+                background,
+                pixel_shader=background.pixel_shader,
+                x=position[0],
+                y=position[1],
+            )
+            group.append(sprite)
+            self._display.refresh()
+
     @staticmethod
-    def text_display(
+    def display_text(
         title=None, title_scale=1, title_length=80, text_scale=1, font=None
     ):
+        """
+        Display lines of text on the built-in display.
+
+        :param str title: The title displayed above the data. Set ``title="Title text"`` to provide
+                          a title. Defaults to None.
+        :param int title_scale: Scale the size of the title. Not necessary if no title is provided.
+                                Defaults to 1.
+        :param int title_length: The maximum number of characters allowed in the title. Only
+                                 necessary if the title is longer than the default 80 characters.
+                                 Defaults to 80.
+        :param int text_scale: Scale the size of the data lines. Scales the title as well.
+                               Defaults to 1.
+        :param font: The font or the path to the custom font file to use to display the text.
+                     Defaults to the built-in ``terminalio.FONT``. Custom font files must be
+                     provided as a string, e.g. ``"/Arial12.bdf"``.
+        """
         return SimpleTextDisplay(
             title=title,
             title_color=SimpleTextDisplay.WHITE,
