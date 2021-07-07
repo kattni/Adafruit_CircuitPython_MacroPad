@@ -47,6 +47,7 @@ from adafruit_midi.note_on import NoteOn
 from adafruit_midi.note_off import NoteOff
 from adafruit_midi.pitch_bend import PitchBend
 from adafruit_midi.control_change import ControlChange
+from adafruit_midi.program_change import ProgramChange
 from adafruit_simple_text_display import SimpleTextDisplay
 
 
@@ -182,6 +183,9 @@ class MacroPad:
             out_channel=midi_out_channel + 1,
         )
 
+    Keycode = Keycode
+    ConsumerControlCode = ConsumerControlCode
+
     @property
     def pixels(self):
         """Sequence-like object representing the twelve NeoPixel LEDs in a 3 x 4 grid on the
@@ -306,17 +310,29 @@ class MacroPad:
 
             macropad = MacroPad()
 
-
+            while True:
+                print(macropad.encoder_switch)
         """
         return not self._encoder_switch.value
 
     @property
-    def keyboard(self): 
-        return self._keyboard
+    def keyboard(self):
+        """
+        A keyboard object used to send HID reports. For details, see the ``Keyboard`` documentation
+        in CircuitPython HID: https://circuitpython.readthedocs.io/projects/hid/en/latest/index.html
 
-    @staticmethod
-    def Keycode():
-        return Keycode
+        The following example types out the letter "a" when the first key is pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+
+        """
+        return self._keyboard
 
     @property
     def keyboard_layout(self):
@@ -325,10 +341,6 @@ class MacroPad:
     @property
     def consumer_control(self):
         return self._consumer_control
-
-    @staticmethod
-    def ConsumerControlCode():
-        return ConsumerControlCode
 
     @property
     def mouse(self):
@@ -353,6 +365,10 @@ class MacroPad:
     @staticmethod
     def ControlChange():
         return ControlChange
+
+    @staticmethod
+    def ProgramChange():
+        return ProgramChange
 
     def display_image(self, file_name=None, position=None):
         """
