@@ -205,6 +205,8 @@ class MacroPad:
 
     Remember that keycodes are the names for key _positions_ on a US keyboard, and may not
     correspond to the character that you mean to send if you want to emulate non-US keyboard.
+
+    For usage example, see the ``keyboard`` documentation in this library.
     """
 
     ConsumerControlCode = ConsumerControlCode
@@ -212,6 +214,8 @@ class MacroPad:
     The contents of the ConsumerControlCode module are available as a property of MacroPad.
     This includes the available USB HID Consumer Control Device constants. This list is not
     exhaustive.
+
+    For usage example, see the ``consumer_control`` documentation in this library.
     """
 
     Mouse = Mouse
@@ -219,6 +223,8 @@ class MacroPad:
     The contents of the Mouse module are available as a property of MacroPad. This includes the
     ``LEFT_BUTTON``, ``MIDDLE_BUTTON``, and ``RIGHT_BUTTON`` constants. The rest of the
     functionality of the ``Mouse`` module should be used through ``macropad.mouse``.
+
+    For usage example, see the ``mouse`` documentation in this library.
     """
 
     @property
@@ -301,7 +307,6 @@ class MacroPad:
 
         .. code-block:: python
 
-
             from adafruit_macropad import MacroPad
 
             macropad = MacroPad()
@@ -356,7 +361,7 @@ class MacroPad:
         A keyboard object used to send HID reports. For details, see the ``Keyboard`` documentation
         in CircuitPython HID: https://circuitpython.readthedocs.io/projects/hid/en/latest/index.html
 
-        The following example types out the letter "a" when the first key is pressed.
+        The following example types out the letter "a" when the rotary encoder switch is pressed.
 
         .. code-block:: python
 
@@ -365,7 +370,8 @@ class MacroPad:
             macropad = MacroPad()
 
             while True:
-
+                if macropad.encoder_switch:
+                    macropad.keyboard.send(macropad.Keycode.A)
         """
         return self._keyboard
 
@@ -373,8 +379,21 @@ class MacroPad:
     def keyboard_layout(self):
         """
         Map ASCII characters to the appropriate key presses on a standard US PC keyboard.
-        Non-ASCII characters and most control characters will raise an exception.
+        Non-ASCII characters and most control characters will raise an exception. Required to send
+        a string of characters.
 
+        The following example sends the string ``"Hello World"`` when the rotary encoder switch is
+        pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.keyboard_layout.write("Hello World")
         """
         return self._keyboard_layout
 
@@ -383,7 +402,17 @@ class MacroPad:
         """
         Send ConsumerControl code reports, used by multimedia keyboards, remote controls, etc.
 
-        The following
+        The following example decreases the volume when the rotary encoder switch is pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.consumer_control.send(macropad.ConsumerControlCode.VOLUME_DECREMENT)
         """
         return self._consumer_control
 
@@ -391,6 +420,19 @@ class MacroPad:
     def mouse(self):
         """
         Send USB HID mouse reports.
+
+        The following example sends a left mouse button click when the rotary encoder switch is
+        pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.mouse.click(macropad.Mouse.LEFT_BUTTON)
         """
         return self._mouse
 
@@ -585,22 +627,34 @@ class MacroPad:
         self._sine_wave_sample = audiocore.RawSample(self._sine_wave)
 
     def play_tone(self, frequency, duration):
-        """Produce a tone using the speaker.
+        """Produce a tone using the speaker at a specified hz for a specified duration in seconds.
 
         :param int frequency: The frequency of the tone in Hz
         :param float duration: The duration of the tone in seconds
 
+        The following example plays a 292hz tone for 1 second when the rotary encoder switch is
+        pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.play_tone(292, 1)
         """
-        # Play a tone of the specified frequency (hz).
         self.start_tone(frequency)
         time.sleep(duration)
         self.stop_tone()
 
     def start_tone(self, frequency):
-        """Produce a tone using the speaker.
+        """Produce a tone using the speaker. Will continue playing until ``stop_tone`` is called.
 
         :param int frequency: The frequency of the tone in Hz
 
+        The following example plays 292hz a tone while the rotary encoder switch is pressed.
         """
         self._speaker_enable.value = True
         length = 100
