@@ -28,12 +28,17 @@ Implementation Notes
 
 """
 
+import array
+import math
+import time
 import board
 import digitalio
 import rotaryio
 import keypad
 import neopixel
 import displayio
+import audiopwmio
+import audiocore
 import usb_hid
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -75,7 +80,7 @@ class MacroPad:
 
     """
 
-    # pylint: disable=invalid-name, too-many-instance-attributes
+    # pylint: disable=invalid-name, too-many-instance-attributes, too-many-public-methods
     def __init__(self, rotation=0, midi_in_channel=0, midi_out_channel=0):
         if rotation not in (0, 90, 180, 270):
             raise ValueError("Only 90 degree rotations are supported.")
@@ -155,12 +160,13 @@ class MacroPad:
         # Define display:
         self._display = board.DISPLAY
         self._display.rotation = rotation
-        # self._bg_group = None
-        # self._bg_file = None
-        # self._bg_sprite = None
 
         # Define audio:
-        # Audio functionality will be added soon.
+        self._speaker_enable = digitalio.DigitalInOut(board.SPEAKER_SHUTDOWN)
+        self._speaker_enable.switch_to_output(value=False)
+        self._sample = None
+        self._sine_wave = None
+        self._sine_wave_sample = None
 
         # Define LEDs:
         self._pixels = neopixel.NeoPixel(board.NEOPIXEL, 12, brightness=0.5)
@@ -185,6 +191,7 @@ class MacroPad:
 
     Keycode = Keycode
     ConsumerControlCode = ConsumerControlCode
+    Mouse = Mouse
 
     @property
     def pixels(self):
@@ -336,6 +343,7 @@ class MacroPad:
 
     @property
     def keyboard_layout(self):
+        """ """
         return self._keyboard_layout
 
     @property
@@ -344,25 +352,95 @@ class MacroPad:
 
     @property
     def mouse(self):
+        """
+        Send USB HID mouse reports.
+        """
         return self._mouse
 
     @property
     def midi(self):
+        """
+        The MIDI object. Used to send and receive MIDI messages. For more details, see the
+        ``adafruit_midi`` documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
+        """
         return self._midi
 
-    def NoteOn(self, note, velocity=127, *, channel=None):
+    @staticmethod
+    def NoteOn(note, velocity=127, *, channel=None):
+        """
+        Note On Change MIDI message. For more details, see the ``adafruit_midi.note_on``
+        documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
+        :param note: The note (key) number either as an int (0-127) or a str which is parsed, e.g.
+                     “C4” (middle C) is 60, “A4” is 69.
+        :param velocity: The strike velocity, 0-127, 0 is equivalent to a Note Off, defaults to
+                         127.
+        :param channel: The channel number of the MIDI message where appropriate. This is updated
+                        by MIDI.send() method.
+        """
         return NoteOn(note=note, velocity=velocity, channel=channel)
 
-    def NoteOff(self, note, velocity=127, *, channel=None):
+    @staticmethod
+    def NoteOff(note, velocity=127, *, channel=None):
+        """
+        Note Off Change MIDI message. For more details, see the ``adafruit_midi.note_off``
+        documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
+        :param note: The note (key) number either as an int (0-127) or a str which is parsed, e.g.
+                     “C4” (middle C) is 60, “A4” is 69.
+        :param velocity: The release velocity, 0-127, defaults to 0.
+        :param channel: The channel number of the MIDI message where appropriate. This is updated
+                        by MIDI.send() method.
+
+        """
         return NoteOff(note=note, velocity=velocity, channel=channel)
 
-    def PitchBend(self, pitch_bend, *, channel=None):
+    @staticmethod
+    def PitchBend(pitch_bend, *, channel=None):
+        """
+        Pitch Bend Change MIDI message. For more details, see the ``adafruit_midi.pitch_bend``
+        documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+        :param pitch_bend: A 14bit unsigned int representing the degree of bend from 0 through 8192
+                           (midpoint, no bend) to 16383.
+        :param channel: The channel number of the MIDI message where appropriate. This is updated
+                        by MIDI.send() method.
+
+        """
         return PitchBend(pitch_bend=pitch_bend, channel=channel)
 
-    def ControlChange(self, control, value, *, channel=None):
+    @staticmethod
+    def ControlChange(control, value, *, channel=None):
+        """
+        Control Change MIDI message. For more details, see the ``adafruit_midi.control_change``
+        documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
+        :param control: The control number, 0-127.
+        :param value: The 7bit value of the control, 0-127.
+        :param channel: The channel number of the MIDI message where appropriate. This is updated
+                        by MIDI.send() method.
+
+        """
         return ControlChange(control=control, value=value, channel=channel)
 
-    def ProgramChange(self, patch, *, channel=None):
+    @staticmethod
+    def ProgramChange(patch, *, channel=None):
+        """
+        Program Change MIDI message. For more details, see the ``adafruit_midi.program_change``
+        documentation in CircuitPython MIDI:
+        https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
+        :param patch: The note (key) number either as an int (0-127) or a str which is parsed,
+                      e.g. “C4” (middle C) is 60, “A4” is 69.
+        :param channel: The channel number of the MIDI message where appropriate. This is updated
+                        by MIDI.send() method.
+        :return:
+        """
         return ProgramChange(patch=patch, channel=channel)
 
     def display_image(self, file_name=None, position=None):
@@ -454,3 +532,72 @@ class MacroPad:
             colors=(SimpleTextDisplay.WHITE,),
             display=board.DISPLAY,
         )
+
+    @staticmethod
+    def _sine_sample(length):
+        tone_volume = (2 ** 15) - 1
+        shift = 2 ** 15
+        for i in range(length):
+            yield int(tone_volume * math.sin(2 * math.pi * (i / length)) + shift)
+
+    def _generate_sample(self, length=100):
+        if self._sample is not None:
+            return
+        self._sine_wave = array.array("H", self._sine_sample(length))
+        self._sample = audiopwmio.PWMAudioOut(board.SPEAKER)
+        self._sine_wave_sample = audiocore.RawSample(self._sine_wave)
+
+    def play_tone(self, frequency, duration):
+        """Produce a tone using the speaker.
+
+        :param int frequency: The frequency of the tone in Hz
+        :param float duration: The duration of the tone in seconds
+
+        """
+        # Play a tone of the specified frequency (hz).
+        self.start_tone(frequency)
+        time.sleep(duration)
+        self.stop_tone()
+
+    def start_tone(self, frequency):
+        """Produce a tone using the speaker.
+
+        :param int frequency: The frequency of the tone in Hz
+
+        """
+        self._speaker_enable.value = True
+        length = 100
+        if length * frequency > 350000:
+            length = 350000 // frequency
+        self._generate_sample(length)
+        # Start playing a tone of the specified frequency (hz).
+        self._sine_wave_sample.sample_rate = int(len(self._sine_wave) * frequency)
+        if not self._sample.playing:
+            self._sample.play(self._sine_wave_sample, loop=True)
+
+    def stop_tone(self):
+        """Use with ``start_tone`` to stop the tone produced."""
+        # Stop playing any tones.
+        if self._sample is not None and self._sample.playing:
+            self._sample.stop()
+            self._sample.deinit()
+            self._sample = None
+        self._speaker_enable.value = False
+
+    def play_file(self, file_name):
+        """Play a .wav file using the onboard speaker.
+
+        :param file_name: The name of your .wav file in quotation marks including .wav
+
+        """
+        # Play a specified file.
+        self.stop_tone()
+        self._speaker_enable.value = True
+        with audiopwmio.PWMAudioOut(
+            board.SPEAKER
+        ) as audio:  # pylint: disable=not-callable
+            wavefile = audiocore.WaveFile(open(file_name, "rb"))
+            audio.play(wavefile)
+            while audio.playing:
+                pass
+        self._speaker_enable.value = False
