@@ -78,6 +78,14 @@ class MacroPad:
                                          channels. Defaults to 0.
     :param int midi_out_channel: The MIDI output channel. Defaults to 0.
 
+    The following shows how to initialise the MacroPad library with the board rotated 90 degrees,
+    and the MIDI channels both set to 1.
+
+    .. code-block:: python
+
+        from adafruit_macropad import MacroPad
+
+        macropad = MacroPad(rotation=90, midi_in_channel=1, midi_out_channel=1)
     """
 
     # pylint: disable=invalid-name, too-many-instance-attributes, too-many-public-methods
@@ -183,15 +191,35 @@ class MacroPad:
         # Define MIDI:
         self._midi = adafruit_midi.MIDI(
             midi_in=usb_midi.ports[0],
-            # MIDI uses channels 1-16. CircuitPython uses 0-15. Ergo +1.
-            in_channel=midi_in_channel + 1,
+            # MIDI uses channels 1-16. CircuitPython uses 0-15. Ergo -1.
+            in_channel=midi_in_channel - 1,
             midi_out=usb_midi.ports[1],
-            out_channel=midi_out_channel + 1,
+            out_channel=midi_out_channel - 1,
         )
 
     Keycode = Keycode
+    """
+    The contents of the Keycode module are available as a property of MacroPad. This includes all
+    keycode constants available within the Keycode module, which includes all the keys on a
+    regular PC or Mac keyboard.
+
+    Remember that keycodes are the names for key _positions_ on a US keyboard, and may not
+    correspond to the character that you mean to send if you want to emulate non-US keyboard.
+    """
+
     ConsumerControlCode = ConsumerControlCode
+    """
+    The contents of the ConsumerControlCode module are available as a property of MacroPad.
+    This includes the available USB HID Consumer Control Device constants. This list is not
+    exhaustive.
+    """
+
     Mouse = Mouse
+    """
+    The contents of the Mouse module are available as a property of MacroPad. This includes the
+    ``LEFT_BUTTON``, ``MIDDLE_BUTTON``, and ``RIGHT_BUTTON`` constants. The rest of the
+    functionality of the ``Mouse`` module should be used through ``macropad.mouse``.
+    """
 
     @property
     def pixels(self):
@@ -343,11 +371,20 @@ class MacroPad:
 
     @property
     def keyboard_layout(self):
-        """ """
+        """
+        Map ASCII characters to the appropriate key presses on a standard US PC keyboard.
+        Non-ASCII characters and most control characters will raise an exception.
+
+        """
         return self._keyboard_layout
 
     @property
     def consumer_control(self):
+        """
+        Send ConsumerControl code reports, used by multimedia keyboards, remote controls, etc.
+
+        The following
+        """
         return self._consumer_control
 
     @property
