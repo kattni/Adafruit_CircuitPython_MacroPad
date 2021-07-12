@@ -26,6 +26,21 @@ Implementation Notes
 * Adafruit's CircuitPython NeoPixel library:
   https://github.com/adafruit/Adafruit_CircuitPython_NeoPixel
 
+* Adafruit's CircuitPython HID library:
+  https://github.com/adafruit/Adafruit_CircuitPython_HID
+
+* Adafruit's CircuitPython MIDI library:
+  https://github.com/adafruit/Adafruit_CircuitPython_MIDI
+
+* Adafruit's CircuitPython Display Text library:
+  https://github.com/adafruit/Adafruit_CircuitPython_Display_Text
+
+* Adafruit's CircuitPython Simple Text Display library:
+  https://github.com/adafruit/Adafruit_CircuitPython_Simple_Text_Display
+
+* Adafruit's CircuitPython Debouncer library:
+  https://github.com/adafruit/Adafruit_CircuitPython_Debouncer
+
 """
 
 import array
@@ -54,6 +69,7 @@ from adafruit_midi.pitch_bend import PitchBend
 from adafruit_midi.control_change import ControlChange
 from adafruit_midi.program_change import ProgramChange
 from adafruit_simple_text_display import SimpleTextDisplay
+from adafruit_debouncer import Debouncer
 
 
 __version__ = "0.0.0-auto.0"
@@ -75,8 +91,8 @@ class MacroPad:
                          right. Defaults to ``0``.
     :param int or tuple midi_in_channel: The MIDI input channel. This can either be an integer for
                                          one channel, or a tuple of integers to listen on multiple
-                                         channels. Defaults to 0.
-    :param int midi_out_channel: The MIDI output channel. Defaults to 0.
+                                         channels. Defaults to 1.
+    :param int midi_out_channel: The MIDI output channel. Defaults to 1.
 
     The following shows how to initialise the MacroPad library with the board rotated 90 degrees,
     and the MIDI channels both set to 1.
@@ -89,7 +105,7 @@ class MacroPad:
     """
 
     # pylint: disable=invalid-name, too-many-instance-attributes, too-many-public-methods
-    def __init__(self, rotation=0, midi_in_channel=0, midi_out_channel=0):
+    def __init__(self, rotation=0, midi_in_channel=1, midi_out_channel=1):
         if rotation not in (0, 90, 180, 270):
             raise ValueError("Only 90 degree rotations are supported.")
 
@@ -164,10 +180,11 @@ class MacroPad:
         self._encoder = rotaryio.IncrementalEncoder(board.ROTA, board.ROTB)
         self._encoder_switch = digitalio.DigitalInOut(board.BUTTON)
         self._encoder_switch.switch_to_input(pull=digitalio.Pull.UP)
+        self._debounced_switch = Debouncer(self._encoder_switch)
 
         # Define display:
-        self._display = board.DISPLAY
-        self._display.rotation = rotation
+        self.display = board.DISPLAY
+        self.display.rotation = rotation
 
         # Define audio:
         self._speaker_enable = digitalio.DigitalInOut(board.SPEAKER_SHUTDOWN)
@@ -236,7 +253,7 @@ class MacroPad:
         to 1 to represent a percentage, i.e. 0.3 sets global brightness to 30%. Brightness defaults
         to 1.
 
-        See `neopixel.NeoPixel` for more info.
+        See ``neopixel.NeoPixel`` for more info.
 
         The following example turns all the pixels green at 50% brightness.
 
@@ -296,12 +313,13 @@ class MacroPad:
         The keys on the MacroPad. Uses events to track key number and state, e.g. pressed or
         released. You must fetch the events using ``keys.event.get()`` and then the events are
         available for usage in your code. Each event has three properties:
-            * ``key_number``: the number of the key that changed. Keys are numbered starting at 0.
-            * ``pressed``: ``True`` if the event is a transition from released to pressed.
-            * ``released``: ``True`` if the event is a transition from pressed to released.
-                            ``released`` is always the opposite of ``pressed``; it's provided
-                            for convenience and clarity, in case you want to test for
-                            key-release events explicitly.
+
+        * ``key_number``: the number of the key that changed. Keys are numbered starting at 0.
+        * ``pressed``: ``True`` if the event is a transition from released to pressed.
+        * ``released``: ``True`` if the event is a transition from pressed to released.
+                        ``released`` is always the opposite of ``pressed``; it's provided
+                        for convenience and clarity, in case you want to test for
+                        key-release events explicitly.
 
         The following example prints the key press and release events to the serial console.
 
@@ -354,6 +372,33 @@ class MacroPad:
                 print(macropad.encoder_switch)
         """
         return not self._encoder_switch.value
+
+    @property
+    def encoder_switch_debounced(self):
+        """
+        The rotary encoder switch debounced. Allows for ``encoder_switch_debounced.pressed`` and
+        ``encoder_switch_debounced.released``. Requires you to include
+        ``encoder_switch_debounced.update()`` inside your loop.
+
+        The following example prints to the serial console when the rotary encoder switch is
+        pressed and released.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                macropad.encoder_switch_debounced.update()
+                if macropad.encoder_switch_debounced.pressed:
+                    print("Pressed!")
+                if macropad.encoder_switch_debounced.released:
+                    print("Released!")
+        """
+        self._debounced_switch.pressed = self._debounced_switch.fell
+        self._debounced_switch.released = self._debounced_switch.rose
+        return self._debounced_switch
 
     @property
     def keyboard(self):
@@ -443,6 +488,34 @@ class MacroPad:
         ``adafruit_midi`` documentation in CircuitPython MIDI:
         https://circuitpython.readthedocs.io/projects/midi/en/latest/
 
+        The following example plays a single note by MIDI number, at full velocity.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("NoteOn/NoteOff MIDI using note number")
+            macropad.midi.send(macropad.NoteOn(44, 127))
+            time.sleep(0.5)
+            macropad.midi.send(macropad.NoteOff(44, 0))
+            time.sleep(1)
+
+        The following example reads incoming MIDI messages.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Read incoming MIDI messages")
+            msg_in = macropad.midi.receive()
+            if msg_in is not None:
+                print("Received:", msg_in.__dict__)
         """
         return self._midi
 
@@ -459,6 +532,40 @@ class MacroPad:
                          127.
         :param channel: The channel number of the MIDI message where appropriate. This is updated
                         by MIDI.send() method.
+
+        The following example plays a single note by MIDI number, at full velocity.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("NoteOn/NoteOff MIDI using note number")
+            macropad.midi.send(macropad.NoteOn(44, 127))
+            time.sleep(0.5)
+            macropad.midi.send(macropad.NoteOff(44, 0))
+            time.sleep(1)
+
+        The following example plays a chord.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Multiple notes on/off in one message")
+            macropad.midi.send([macropad.NoteOn(44, 127),
+                                macropad.NoteOn(48, 127),
+                                macropad.NoteOn(51, 127)])
+            time.sleep(1)
+            macropad.midi.send([macropad.NoteOff(44, 0),
+                                macropad.NoteOff(48, 0),
+                                macropad.NoteOff(51, 0)])
+            time.sleep(1)
         """
         return NoteOn(note=note, velocity=velocity, channel=channel)
 
@@ -475,6 +582,20 @@ class MacroPad:
         :param channel: The channel number of the MIDI message where appropriate. This is updated
                         by MIDI.send() method.
 
+        The following example plays a single note by MIDI number, at half velocity.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("NoteOn/NoteOff using note name")
+            macropad.midi.send(macropad.NoteOn("G#2", 64))
+            time.sleep(0.5)
+            macropad.midi.send(macropad.NoteOff("G#2", 0))
+            time.sleep(1)
         """
         return NoteOff(note=note, velocity=velocity, channel=channel)
 
@@ -484,11 +605,38 @@ class MacroPad:
         Pitch Bend Change MIDI message. For more details, see the ``adafruit_midi.pitch_bend``
         documentation in CircuitPython MIDI:
         https://circuitpython.readthedocs.io/projects/midi/en/latest/
+
         :param pitch_bend: A 14bit unsigned int representing the degree of bend from 0 through 8192
                            (midpoint, no bend) to 16383.
         :param channel: The channel number of the MIDI message where appropriate. This is updated
                         by MIDI.send() method.
 
+        The following example sets a pitch bend.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Set pitch bend")
+            macropad.midi.send(macropad.PitchBend(4096))
+
+        The following example sweeps a pitch bend.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Sweep pitch bend")
+            for i in range(0, 4096, 8):
+                macropad.midi.send(macropad.PitchBend(i))
+            for i in range(0, 4096, 8):
+                macropad.midi.send(macropad.PitchBend(4096-i))
         """
         return PitchBend(pitch_bend=pitch_bend, channel=channel)
 
@@ -504,6 +652,34 @@ class MacroPad:
         :param channel: The channel number of the MIDI message where appropriate. This is updated
                         by MIDI.send() method.
 
+        The following example sets a control change value.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Set a CC value")
+            macropad.midi.send(macropad.ControlChange(7, 64))
+
+        The following example sweeps a control change value.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Sweep a CC value")
+            for i in range(127):
+                macropad.midi.send(macropad.ControlChange(1, i))
+                time.sleep(0.01)
+            for i in range(127):
+                macropad.midi.send(macropad.ControlChange(1, 127-i))
+                time.sleep(0.01)
         """
         return ControlChange(control=control, value=value, channel=channel)
 
@@ -518,7 +694,21 @@ class MacroPad:
                       e.g. “C4” (middle C) is 60, “A4” is 69.
         :param channel: The channel number of the MIDI message where appropriate. This is updated
                         by MIDI.send() method.
-        :return:
+
+        The following example sends a program change for bank switching.
+
+        .. code-block:: python
+
+            import time
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            print("Send ProgramChange bank messages")
+            macropad.midi.send(macropad.ProgramChange(63))
+            time.sleep(2)
+            macropad.midi.send(macropad.ProgramChange(8))
+            time.sleep(2)
         """
         return ProgramChange(patch=patch, channel=channel)
 
@@ -549,7 +739,7 @@ class MacroPad:
         if not position:
             position = (0, 0)
         group = displayio.Group(scale=1)
-        self._display.show(group)
+        self.display.show(group)
         with open(file_name, "rb") as image_file:
             background = displayio.OnDiskBitmap(image_file)
             sprite = displayio.TileGrid(
@@ -559,14 +749,16 @@ class MacroPad:
                 y=position[1],
             )
             group.append(sprite)
-            self._display.refresh()
+            self.display.refresh()
 
     @staticmethod
     def display_text(
         title=None, title_scale=1, title_length=80, text_scale=1, font=None
     ):
         """
-        Display lines of text on the built-in display.
+        Display lines of text on the built-in display. Note that if you instantiate this without
+        a title, it will display the first (``[0]``) line of text at the top of the display - use
+        this feature to have a dynamic "title".
 
         :param str title: The title displayed above the data. Set ``title="Title text"`` to provide
                           a title. Defaults to None.
@@ -655,6 +847,18 @@ class MacroPad:
         :param int frequency: The frequency of the tone in Hz
 
         The following example plays 292hz a tone while the rotary encoder switch is pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.start_tone(292)
+                else:
+                    macropad.stop_tone()
         """
         self._speaker_enable.value = True
         length = 100
@@ -667,7 +871,8 @@ class MacroPad:
             self._sample.play(self._sine_wave_sample, loop=True)
 
     def stop_tone(self):
-        """Use with ``start_tone`` to stop the tone produced."""
+        """Use with ``start_tone`` to stop the tone produced. See usage example in ``start_tone``
+        documentation."""
         # Stop playing any tones.
         if self._sample is not None and self._sample.playing:
             self._sample.stop()
@@ -680,6 +885,17 @@ class MacroPad:
 
         :param file_name: The name of your .wav file in quotation marks including .wav
 
+        The following example plays the file "sound.wav" when the rotary encoder switch is pressed.
+
+        .. code-block:: python
+
+            from adafruit_macropad import MacroPad
+
+            macropad = MacroPad()
+
+            while True:
+                if macropad.encoder_switch:
+                    macropad.play_file("sound.wav")
         """
         # Play a specified file.
         self.stop_tone()
